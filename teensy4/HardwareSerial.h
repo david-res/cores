@@ -35,11 +35,30 @@
 
 #ifdef __cplusplus
 #include "Stream.h"
+
+#ifdef SERIAL_9BIT_SUPPORT
+#define BUFTYPE uint16_t
+#else
+#define BUFTYPE uint8_t
+#endif
+
+extern "C" {
+	extern void IRQHandler_Serial1();
+	extern void IRQHandler_Serial2();
+	extern void IRQHandler_Serial3();
+	extern void IRQHandler_Serial4();
+	extern void IRQHandler_Serial5();
+	extern void IRQHandler_Serial6();
+	extern void IRQHandler_Serial7();
+	extern void IRQHandler_Serial8();
+}
+
 class HardwareSerial : public Stream
 {
 public:
 	typedef struct {
 		IRQ_NUMBER_t irq;
+		void (*irq_handler)(void);
 		volatile uint32_t &ccm_register;
 		const uint32_t ccm_value;
 		volatile uint32_t &rx_mux_register;
@@ -48,8 +67,12 @@ public:
 		const uint8_t tx_mux_val;
 	} hardware_t;
 public:
-	constexpr HardwareSerial(IMXRT_LPUART_t *myport, const hardware_t *myhardware) :
-		port(myport), hardware(myhardware) {
+	constexpr HardwareSerial(IMXRT_LPUART_t *myport, const hardware_t *myhardware, 
+		volatile BUFTYPE *_tx_buffer, size_t _tx_buffer_size, 
+		volatile BUFTYPE *_rx_buffer, size_t _rx_buffer_size) :
+		port(myport), hardware(myhardware),
+		tx_buffer_(_tx_buffer), rx_buffer_(_rx_buffer), tx_buffer_size_(_tx_buffer_size),  rx_buffer_size_(_rx_buffer_size),
+		tx_buffer_total_size_(_tx_buffer_size), rx_buffer_total_size_(_rx_buffer_size) {
 	}
 	void begin(uint32_t baud, uint8_t format=0);
 
@@ -90,6 +113,32 @@ public:
 private:
 	IMXRT_LPUART_t * const port;
 	const hardware_t * const hardware;
+
+	volatile BUFTYPE 	*tx_buffer_;
+	volatile BUFTYPE 	*rx_buffer_;
+	volatile BUFTYPE	*rx_buffer_storage_ = nullptr;
+	volatile BUFTYPE	*tx_buffer_storage_ = nullptr;
+	size_t				tx_buffer_size_;
+	size_t				rx_buffer_size_;
+	size_t				tx_buffer_total_size_;
+	size_t				rx_buffer_total_size_;
+	volatile uint8_t 	transmitting_ = 0;
+	volatile uint16_t 	tx_buffer_head_ = 0;
+	volatile uint16_t 	tx_buffer_tail_ = 0;
+	volatile uint16_t 	rx_buffer_head_ = 0;
+	volatile uint16_t 	rx_buffer_tail_ = 0;
+
+	void IRQHandler();
+	friend void IRQHandler_Serial1();
+	friend void IRQHandler_Serial2();
+	friend void IRQHandler_Serial3();
+	friend void IRQHandler_Serial4();
+	friend void IRQHandler_Serial5();
+	friend void IRQHandler_Serial6();
+	friend void IRQHandler_Serial7();
+	friend void IRQHandler_Serial8();
+
+
 };
 extern HardwareSerial Serial1;
 extern HardwareSerial Serial2;
