@@ -100,6 +100,13 @@ void HardwareSerial::begin(uint32_t baud, uint8_t format)
 		}
 	}
 	//printf(" baud %d: osr=%d, div=%d\n", baud, bestosr, bestdiv);
+	rx_buffer_head_ = 0;
+	rx_buffer_tail_ = 0;
+	tx_buffer_head_ = 0;
+	tx_buffer_tail_ = 0;
+	transmitting_ = 0;
+
+
 	hardware->ccm_register |= hardware->ccm_value;
 	hardware->rx_mux_register = hardware->rx_mux_val;
 	hardware->tx_mux_register = hardware->tx_mux_val;
@@ -113,20 +120,118 @@ void HardwareSerial::begin(uint32_t baud, uint8_t format)
 	port->CTRL = CTRL_TX_INACTIVE;
 };
 
+void HardwareSerial::end(void)
+{
+
+}
+
+void HardwareSerial::transmitterEnable(uint8_t pin)
+{
+	while (transmitting_) ;
+	pinMode(pin, OUTPUT);
+	digitalWrite(pin, LOW);
+	transmit_pin_ = pin; 	// BUGBUG - Faster way? 
+
+}
+
+void HardwareSerial::setRX(uint8_t pin)
+{
+	// BUGBUG Implement
+}
+
+void HardwareSerial::setTX(uint8_t pin, bool opendrain)
+{
+	// BUGBUG Implement
+}
+
+bool HardwareSerial::attachRts(uint8_t pin)
+{
+	// BUGBUG Implement
+	return false;
+}
+
+bool HardwareSerial::attachCts(uint8_t pin)
+{
+	// BUGBUG Implement
+	return false;
+}
+
+void HardwareSerial::clear(void)
+{
+	// BUGBUG:: deal with FIFO
+	rx_buffer_head_ = rx_buffer_tail_;
+	//if (rts_pin_) rts_assert();
+}
+
+int HardwareSerial::availableForWrite(void)
+{
+	uint32_t head, tail;
+
+	head = tx_buffer_head_;
+	tail = tx_buffer_tail_;
+	if (head >= tail) return tx_buffer_total_size_ - 1 - head + tail;
+	return tail - head - 1;
+}
+
+size_t HardwareSerial::write9bit(uint32_t c)
+{
+	return 0;
+}
+
+
+
+
 int HardwareSerial::available(void)
 {
-	return -1;
+	uint32_t head, tail;
+
+	head = rx_buffer_head_;
+	tail = rx_buffer_tail_;
+	if (head >= tail) return head - tail;
+	return rx_buffer_total_size_ + head - tail;
 }
 
 int HardwareSerial::peek(void)
 {
-	return -1;
+	uint32_t head, tail;
+
+	head = rx_buffer_head_;
+	tail = rx_buffer_tail_;
+	if (head == tail) return -1;
+	if (++tail >= rx_buffer_total_size_) tail = 0;
+	if (tail < rx_buffer_size_) {
+		return rx_buffer_[tail];
+	} else {
+		return rx_buffer_storage_[tail-rx_buffer_size_];
+	}
 }
 
 int HardwareSerial::read(void)
 {
-	return -1;
-}
+	uint32_t head, tail;
+	int c;
+
+	head = rx_buffer_head_;
+	tail = rx_buffer_tail_;
+	if (head == tail) return -1;
+	if (++tail >= rx_buffer_total_size_) tail = 0;
+	if (tail < rx_buffer_size_) {
+		c = rx_buffer_[tail];
+	} else {
+		c = rx_buffer_storage_[tail-rx_buffer_size_];
+	}
+	rx_buffer_tail_ = tail;
+	if (rts_pin_) {
+		uint32_t avail;
+		if (head >= tail) avail = head - tail;
+		else avail = rx_buffer_total_size_ + head - tail;
+		/*  
+		if (avail <= rts_low_watermark_) rts_assert();
+		*/
+	}
+	return c;
+}	
+
 void HardwareSerial::flush(void)
 {
 	while (transmitting_) yield(); // wait
@@ -141,9 +246,10 @@ size_t HardwareSerial::write(uint8_t c)
 	head = tx_buffer_head_;
 	if (++head >= tx_buffer_total_size_) head = 0;
 	while (tx_buffer_tail_ == head) {
-		/* int priority = nvic_execution_priority();
-		if (priority <= hardware().irq_priority) {
-			if ((LPUART0_STAT & LPUART_STAT_TDRE)) {
+		/*
+		int priority = nvic_execution_priority();
+		if (priority <= IRQ_PRIORITY) {
+			if ((port->STAT & LPUART_STAT_TDRE)) {
 				uint32_t tail = tx_buffer_tail_;
 				if (++tail >= tx_buffer_total_size_) tail = 0;
 				if (tail < tx_buffer_size_) {
@@ -151,13 +257,14 @@ size_t HardwareSerial::write(uint8_t c)
 				} else {
 					n = tx_buffer_storage_[tail-tx_buffer_size_];
 				}
-				LPUART0_DATA = n;
+				port->DATA  = n;
 				tx_buffer_tail_ = tail;
 			}
-		} else if (priority >= 256) {
+		} else if (priority >= 256) 
+		*/
+		{
 			yield(); // wait
-		} */
-		yield();
+		} 
 	}
 	//digitalWrite(5, LOW);
 	//Serial.printf("WR %x %d %d %d %x %x\n", c, head, tx_buffer_size_,  tx_buffer_total_size_, (uint32_t)tx_buffer_, (uint32_t)tx_buffer_storage_);
@@ -178,6 +285,30 @@ void HardwareSerial::IRQHandler()
 	//digitalWrite(4, HIGH);
 	uint32_t head, tail, n;
 	uint32_t ctrl;
+
+	// See if we have stuff to read in.
+	if (port->STAT & LPUART_STAT_RDRF) {
+		#if 1
+		n = port->DATA;	// get the byte... 
+		#else
+		if (use9Bits_ && (port().C3 & 0x80)) {
+			n = port().D | 0x100;
+		} else {
+			n = port().D;
+		} 
+		#endif
+		head = rx_buffer_head_ + 1;
+		if (head >= rx_buffer_total_size_) head = 0;
+		if (head != rx_buffer_tail_) {
+			if (head < rx_buffer_size_) {
+				rx_buffer_[head] = n;
+			} else {
+				rx_buffer_storage_[head-rx_buffer_size_] = n;
+			}
+			rx_buffer_head_ = head;
+		}
+	}
+
 
 	// See if we are transmitting and room in buffer. 
 	ctrl = port->CTRL;
