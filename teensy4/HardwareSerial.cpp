@@ -1,8 +1,8 @@
 
 #include "HardwareSerial.h"
 #include "core_pins.h"
-
-#include "debug/printf.h"
+//#include "Arduino.h"
+//#include "debug/printf.h"
 
 /*typedef struct {
         const uint32_t VERID;
@@ -135,7 +135,8 @@ void HardwareSerial::flush(void)
 size_t HardwareSerial::write(uint8_t c)
 {
 	uint32_t head, n;
-
+	//digitalWrite(3, HIGH);
+	//digitalWrite(5, HIGH);
 //	if (transmit_pin_) transmit_assert();
 	head = tx_buffer_head_;
 	if (++head >= tx_buffer_total_size_) head = 0;
@@ -158,6 +159,8 @@ size_t HardwareSerial::write(uint8_t c)
 		} */
 		yield();
 	}
+	//digitalWrite(5, LOW);
+	//Serial.printf("WR %x %d %d %d %x %x\n", c, head, tx_buffer_size_,  tx_buffer_total_size_, (uint32_t)tx_buffer_, (uint32_t)tx_buffer_storage_);
 	if (head < tx_buffer_size_) {
 		tx_buffer_[head] = c;
 	} else {
@@ -165,12 +168,14 @@ size_t HardwareSerial::write(uint8_t c)
 	}
 	transmitting_ = 1;
 	tx_buffer_head_ = head;
-	port->CTRL = CTRL_TX_ACTIVE; // (may need to handle this issue)BITBAND_SET_BIT(LPUART0_CTRL, TIE_BIT);
+	port->CTRL |= LPUART_CTRL_TIE; // (may need to handle this issue)BITBAND_SET_BIT(LPUART0_CTRL, TIE_BIT);
+	//digitalWrite(3, LOW);
 	return 1;
 }
 
 void HardwareSerial::IRQHandler() 
 {
+	//digitalWrite(4, HIGH);
 	uint32_t head, tail, n;
 	uint32_t ctrl;
 
@@ -201,6 +206,7 @@ void HardwareSerial::IRQHandler()
 		//if (transmit_pin_) transmit_deassert();
 		port->CTRL = CTRL_TX_INACTIVE;
 	}
+	//digitalWrite(4, LOW);
 }
 
 void IRQHandler_Serial1()
@@ -246,11 +252,9 @@ void IRQHandler_Serial8()
 
 
 
-__attribute__((section(".progmem")))
-
 // Serial1
-static volatile BUFTYPE tx_buffer1[SERIAL1_TX_BUFFER_SIZE];
-static volatile BUFTYPE rx_buffer1[SERIAL1_RX_BUFFER_SIZE];
+static BUFTYPE tx_buffer1[SERIAL1_TX_BUFFER_SIZE];
+static BUFTYPE rx_buffer1[SERIAL1_RX_BUFFER_SIZE];
 
 const HardwareSerial::hardware_t UART6_Hardware = {
 	IRQ_LPUART6, &IRQHandler_Serial1,
@@ -264,8 +268,9 @@ HardwareSerial Serial1(&IMXRT_LPUART6, &UART6_Hardware, tx_buffer1, SERIAL1_TX_B
 	rx_buffer1,  SERIAL1_RX_BUFFER_SIZE);
 
 // Serial2
-static volatile BUFTYPE tx_buffer2[SERIAL2_TX_BUFFER_SIZE];
-static volatile BUFTYPE rx_buffer2[SERIAL2_RX_BUFFER_SIZE];
+static BUFTYPE tx_buffer2[SERIAL2_TX_BUFFER_SIZE];
+static BUFTYPE rx_buffer2[SERIAL2_RX_BUFFER_SIZE];
+
 static HardwareSerial::hardware_t UART4_Hardware = {
 	IRQ_LPUART4, &IRQHandler_Serial2,
 	CCM_CCGR1, CCM_CCGR1_LPUART4(CCM_CCGR_ON),
@@ -278,8 +283,8 @@ HardwareSerial Serial2(&IMXRT_LPUART4, &UART4_Hardware, tx_buffer2, SERIAL2_TX_B
 	rx_buffer2,  SERIAL2_RX_BUFFER_SIZE);
 
 // Serial3
-static volatile BUFTYPE tx_buffer3[SERIAL3_TX_BUFFER_SIZE];
-static volatile BUFTYPE rx_buffer3[SERIAL3_RX_BUFFER_SIZE];
+static BUFTYPE tx_buffer3[SERIAL3_TX_BUFFER_SIZE];
+static BUFTYPE rx_buffer3[SERIAL3_RX_BUFFER_SIZE];
 static HardwareSerial::hardware_t UART2_Hardware = {
 	IRQ_LPUART2, &IRQHandler_Serial3,
 	CCM_CCGR0, CCM_CCGR0_LPUART2(CCM_CCGR_ON),
@@ -292,8 +297,8 @@ HardwareSerial Serial3(&IMXRT_LPUART2, &UART2_Hardware,tx_buffer3, SERIAL3_TX_BU
 	rx_buffer3,  SERIAL3_RX_BUFFER_SIZE);
 
 // Serial4
-static volatile BUFTYPE tx_buffer4[SERIAL4_TX_BUFFER_SIZE];
-static volatile BUFTYPE rx_buffer4[SERIAL4_RX_BUFFER_SIZE];
+static BUFTYPE tx_buffer4[SERIAL4_TX_BUFFER_SIZE];
+static BUFTYPE rx_buffer4[SERIAL4_RX_BUFFER_SIZE];
 static HardwareSerial::hardware_t UART3_Hardware = {
 	IRQ_LPUART3, &IRQHandler_Serial4,
 	CCM_CCGR0, CCM_CCGR0_LPUART3(CCM_CCGR_ON),
@@ -306,8 +311,8 @@ HardwareSerial Serial4(&IMXRT_LPUART3, &UART3_Hardware, tx_buffer4, SERIAL4_TX_B
 	rx_buffer4,  SERIAL4_RX_BUFFER_SIZE);
 
 // Serial5
-static volatile BUFTYPE tx_buffer5[SERIAL5_TX_BUFFER_SIZE];
-static volatile BUFTYPE rx_buffer5[SERIAL5_RX_BUFFER_SIZE];
+static BUFTYPE tx_buffer5[SERIAL5_TX_BUFFER_SIZE];
+static BUFTYPE rx_buffer5[SERIAL5_RX_BUFFER_SIZE];
 static HardwareSerial::hardware_t UART8_Hardware = {
 	IRQ_LPUART8, &IRQHandler_Serial5,
 	CCM_CCGR6, CCM_CCGR6_LPUART8(CCM_CCGR_ON),
@@ -320,8 +325,8 @@ HardwareSerial Serial5(&IMXRT_LPUART8, &UART8_Hardware, tx_buffer5, SERIAL5_TX_B
 	rx_buffer5,  SERIAL5_RX_BUFFER_SIZE);
 
 // Serial6
-static volatile BUFTYPE tx_buffer6[SERIAL6_TX_BUFFER_SIZE];
-static volatile BUFTYPE rx_buffer6[SERIAL6_RX_BUFFER_SIZE];
+static BUFTYPE tx_buffer6[SERIAL6_TX_BUFFER_SIZE];
+static BUFTYPE rx_buffer6[SERIAL6_RX_BUFFER_SIZE];
 static HardwareSerial::hardware_t UART1_Hardware = {
 	IRQ_LPUART1, &IRQHandler_Serial6,
 	CCM_CCGR5, CCM_CCGR5_LPUART1(CCM_CCGR_ON),
@@ -334,8 +339,9 @@ HardwareSerial Serial6(&IMXRT_LPUART1, &UART1_Hardware, tx_buffer6, SERIAL6_TX_B
 	rx_buffer6,  SERIAL6_RX_BUFFER_SIZE);
 
 // Serial7
-static volatile BUFTYPE tx_buffer7[SERIAL7_TX_BUFFER_SIZE];
-static volatile BUFTYPE rx_buffer7[SERIAL7_RX_BUFFER_SIZE];
+static BUFTYPE tx_buffer7[SERIAL7_TX_BUFFER_SIZE];
+static BUFTYPE rx_buffer7[SERIAL7_RX_BUFFER_SIZE];
+__attribute__((section(".progmem")))
 static HardwareSerial::hardware_t UART7_Hardware = {
 	IRQ_LPUART7, &IRQHandler_Serial7,
 	CCM_CCGR5, CCM_CCGR5_LPUART7(CCM_CCGR_ON),
@@ -348,8 +354,9 @@ HardwareSerial Serial7(&IMXRT_LPUART7, &UART7_Hardware, tx_buffer7, SERIAL7_TX_B
 	rx_buffer7,  SERIAL7_RX_BUFFER_SIZE);
 
 // Serial8
-static volatile BUFTYPE tx_buffer8[SERIAL8_TX_BUFFER_SIZE];
-static volatile BUFTYPE rx_buffer8[SERIAL8_RX_BUFFER_SIZE];
+static BUFTYPE tx_buffer8[SERIAL8_TX_BUFFER_SIZE];
+static BUFTYPE rx_buffer8[SERIAL8_RX_BUFFER_SIZE];
+__attribute__((section(".progmem")))
 static HardwareSerial::hardware_t UART5_Hardware = {
 	IRQ_LPUART5, &IRQHandler_Serial8,
 	CCM_CCGR3, CCM_CCGR3_LPUART5(CCM_CCGR_ON),
