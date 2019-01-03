@@ -66,8 +66,10 @@ public:
 		const uint8_t tx_pin;
 		//volatile uint32_t &rx_mux_register;
 		//volatile uint32_t &tx_mux_register;
+		volatile uint32_t &rx_select_input_register;
 		const uint8_t rx_mux_val;
 		const uint8_t tx_mux_val;
+		const uint8_t rx_select_val;
 	} hardware_t;
 public:
 	constexpr HardwareSerial(IMXRT_LPUART_t *myport, const hardware_t *myhardware, 
