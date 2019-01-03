@@ -1,7 +1,7 @@
 
 #include "HardwareSerial.h"
 #include "core_pins.h"
-//#include "Arduino.h"
+#include "Arduino.h"
 //#include "debug/printf.h"
 
 /*typedef struct {
@@ -106,18 +106,34 @@ void HardwareSerial::begin(uint32_t baud, uint8_t format)
 	tx_buffer_tail_ = 0;
 	transmitting_ = 0;
 
-
 	hardware->ccm_register |= hardware->ccm_value;
-	hardware->rx_mux_register = hardware->rx_mux_val;
-	hardware->tx_mux_register = hardware->tx_mux_val;
+
+	uint32_t fastio = IOMUXC_PAD_SRE | IOMUXC_PAD_DSE(3) | IOMUXC_PAD_SPEED(3);
+	*(portControlRegister(hardware->rx_pin)) = fastio;
+	*(portControlRegister(hardware->tx_pin)) = fastio;
+
+	*(portConfigRegister(hardware->rx_pin)) = hardware->rx_mux_val | 0x10;
+	*(portConfigRegister(hardware->tx_pin)) = hardware->tx_mux_val | 0x10;
+	//hardware->rx_mux_register = hardware->rx_mux_val;
+	//hardware->tx_mux_register = hardware->tx_mux_val;
 	port->BAUD = LPUART_BAUD_OSR(bestosr - 1) | LPUART_BAUD_SBR(bestdiv);
+	port->PINCFG = 0;
 
 	// Enable the transmitter, receiver and enable receiver interrupt
 	attachInterruptVector(hardware->irq, hardware->irq_handler);
 	NVIC_SET_PRIORITY(hardware->irq, IRQ_PRIORITY);	// maybe should put into hardware...
 	NVIC_ENABLE_IRQ(hardware->irq);
-
+	uint16_t tx_fifo_size = (((port->FIFO >> 4) & 0x7) << 2);
+	uint8_t tx_water = (tx_fifo_size < 16) ? tx_fifo_size >> 1 : 7;
+	uint16_t rx_fifo_size = (((port->FIFO >> 0) & 0x7) << 2);
+	uint8_t rx_water = (rx_fifo_size < 16) ? rx_fifo_size >> 1 : 7;
+	Serial.printf("SerialX::begin stat:%x ctrl:%x fifo:%x water:%x\n", port->STAT, port->CTRL, port->FIFO, port->WATER );
+	Serial.printf("  FIFO sizes: tx:%d rx:%d\n",tx_fifo_size, rx_fifo_size);	
+	Serial.printf("  Watermark tx:%d, rx: %d\n", tx_water, rx_water);
+	port->WATER = LPUART_WATER_RXWATER(rx_water) | LPUART_WATER_TXWATER(tx_water);
+	port->FIFO |= LPUART_FIFO_TXFE | LPUART_FIFO_RXFE;
 	port->CTRL = CTRL_TX_INACTIVE;
+	Serial.printf("    stat:%x ctrl:%x fifo:%x water:%x\n", port->STAT, port->CTRL, port->FIFO, port->WATER );
 };
 
 void HardwareSerial::end(void)
@@ -137,6 +153,8 @@ void HardwareSerial::transmitterEnable(uint8_t pin)
 void HardwareSerial::setRX(uint8_t pin)
 {
 	// BUGBUG Implement
+	Serial.printf("SerialX TX(%d) param:%x stat:%x ctrl:%x fifo:%x water:%x\n", hardware->tx_pin, port->PARAM, port->STAT, port->CTRL, port->FIFO, port->WATER );
+
 }
 
 void HardwareSerial::setTX(uint8_t pin, bool opendrain)
@@ -282,12 +300,13 @@ size_t HardwareSerial::write(uint8_t c)
 
 void HardwareSerial::IRQHandler() 
 {
-	//digitalWrite(4, HIGH);
+	digitalWrite(4, HIGH);
 	uint32_t head, tail, n;
 	uint32_t ctrl;
 
 	// See if we have stuff to read in.
 	if (port->STAT & LPUART_STAT_RDRF) {
+		digitalWrite(5, HIGH);
 		#if 1
 		n = port->DATA;	// get the byte... 
 		#else
@@ -307,6 +326,7 @@ void HardwareSerial::IRQHandler()
 			}
 			rx_buffer_head_ = head;
 		}
+		digitalWrite(5, LOW);
 	}
 
 
@@ -314,11 +334,12 @@ void HardwareSerial::IRQHandler()
 	ctrl = port->CTRL;
 	if ((ctrl & LPUART_CTRL_TIE) && (port->STAT & LPUART_STAT_TDRE))
 	{
+		digitalWrite(3, HIGH);
+
 		head = tx_buffer_head_;
 		tail = tx_buffer_tail_;
-		if (head == tail) {
-			port->CTRL = CTRL_TX_COMPLETING;
-		} else {
+		do {
+			if (head == tail) break;
 			if (++tail >= tx_buffer_total_size_) tail = 0;
 			if (tail < tx_buffer_size_) {
 				n = tx_buffer_[tail];
@@ -327,8 +348,10 @@ void HardwareSerial::IRQHandler()
 			}
 			//if (use9Bits_) port().C3 = (port().C3 & ~0x40) | ((n & 0x100) >> 2);
 			port->DATA = n;
-			tx_buffer_tail_ = tail;
-		}
+		} while (((port->WATER >> 8) & 0x7) < 4); 	// need to computer properly
+		tx_buffer_tail_ = tail;
+		if (head == tail) port->CTRL = CTRL_TX_COMPLETING;
+		digitalWrite(3, LOW);
 	}
 
 	if ((ctrl & LPUART_CTRL_TCIE) && (port->STAT & LPUART_STAT_TDRE))
@@ -337,7 +360,7 @@ void HardwareSerial::IRQHandler()
 		//if (transmit_pin_) transmit_deassert();
 		port->CTRL = CTRL_TX_INACTIVE;
 	}
-	//digitalWrite(4, LOW);
+	digitalWrite(4, LOW);
 }
 
 void IRQHandler_Serial1()
@@ -390,8 +413,8 @@ static BUFTYPE rx_buffer1[SERIAL1_RX_BUFFER_SIZE];
 const HardwareSerial::hardware_t UART6_Hardware = {
 	IRQ_LPUART6, &IRQHandler_Serial1,
 	CCM_CCGR3, CCM_CCGR3_LPUART6(CCM_CCGR_ON),
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B0_03, // pin 0
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B0_02, // pin 1
+	0, //IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B0_03, // pin 0
+	1, //IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B0_02, // pin 1
 	2, // page 473
 	2, // page 472
 };
@@ -405,8 +428,8 @@ static BUFTYPE rx_buffer2[SERIAL2_RX_BUFFER_SIZE];
 static HardwareSerial::hardware_t UART4_Hardware = {
 	IRQ_LPUART4, &IRQHandler_Serial2,
 	CCM_CCGR1, CCM_CCGR1_LPUART4(CCM_CCGR_ON),
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_B1_01, // pin 6
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_B1_00, // pin 7
+	6, //IOMUXC_SW_MUX_CTL_PAD_GPIO_B1_01, // pin 6
+	7, // IOMUXC_SW_MUX_CTL_PAD_GPIO_B1_00, // pin 7
 	2, // page 521
 	2, // page 520
 };
@@ -419,8 +442,8 @@ static BUFTYPE rx_buffer3[SERIAL3_RX_BUFFER_SIZE];
 static HardwareSerial::hardware_t UART2_Hardware = {
 	IRQ_LPUART2, &IRQHandler_Serial3,
 	CCM_CCGR0, CCM_CCGR0_LPUART2(CCM_CCGR_ON),
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_03, // pin 15
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_02, // pin 14
+	15, //IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_03, // pin 15
+	14, //IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_02, // pin 14
 	2, // page 491
 	2, // page 490
 };
@@ -433,8 +456,8 @@ static BUFTYPE rx_buffer4[SERIAL4_RX_BUFFER_SIZE];
 static HardwareSerial::hardware_t UART3_Hardware = {
 	IRQ_LPUART3, &IRQHandler_Serial4,
 	CCM_CCGR0, CCM_CCGR0_LPUART3(CCM_CCGR_ON),
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_07, // pin 16
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_06, // pin 17
+	16, //IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_07, // pin 16
+	17, //IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_06, // pin 17
 	2, // page 495
 	2, // page 494
 };
@@ -447,8 +470,8 @@ static BUFTYPE rx_buffer5[SERIAL5_RX_BUFFER_SIZE];
 static HardwareSerial::hardware_t UART8_Hardware = {
 	IRQ_LPUART8, &IRQHandler_Serial5,
 	CCM_CCGR6, CCM_CCGR6_LPUART8(CCM_CCGR_ON),
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_11, // pin 21
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_10, // pin 20
+	21, //IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_11, // pin 21
+	20, //IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_10, // pin 20
 	2, // page 499
 	2, // page 498
 };
@@ -461,8 +484,8 @@ static BUFTYPE rx_buffer6[SERIAL6_RX_BUFFER_SIZE];
 static HardwareSerial::hardware_t UART1_Hardware = {
 	IRQ_LPUART1, &IRQHandler_Serial6,
 	CCM_CCGR5, CCM_CCGR5_LPUART1(CCM_CCGR_ON),
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B0_13, // pin 25
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B0_12, // pin 24
+	25, //IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B0_13, // pin 25
+	24, //IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B0_12, // pin 24
 	2, // page 486
 	2, // page 485
 };
@@ -476,8 +499,8 @@ __attribute__((section(".progmem")))
 static HardwareSerial::hardware_t UART7_Hardware = {
 	IRQ_LPUART7, &IRQHandler_Serial7,
 	CCM_CCGR5, CCM_CCGR5_LPUART7(CCM_CCGR_ON),
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_32, // pin 28
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_31, // pin 29
+	28, //IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_32, // pin 28
+	29, //IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_31, // pin 29
 	2, // page 458
 	2, // page 457
 };
@@ -491,14 +514,11 @@ __attribute__((section(".progmem")))
 static HardwareSerial::hardware_t UART5_Hardware = {
 	IRQ_LPUART5, &IRQHandler_Serial8,
 	CCM_CCGR3, CCM_CCGR3_LPUART5(CCM_CCGR_ON),
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_24, // pin 30
-	IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_23, // pin 31
+	30, //IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_24, // pin 30
+	31, // IOMUXC_SW_MUX_CTL_PAD_GPIO_EMC_23, // pin 31
 	2, // page 450
 	2, // page 449
 };
 HardwareSerial Serial8(&IMXRT_LPUART5, &UART5_Hardware, tx_buffer8, SERIAL8_TX_BUFFER_SIZE,
 	rx_buffer8,  SERIAL8_RX_BUFFER_SIZE);
-
-
-
 

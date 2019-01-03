@@ -62,8 +62,10 @@ public:
 		void (*irq_handler)(void);
 		volatile uint32_t &ccm_register;
 		const uint32_t ccm_value;
-		volatile uint32_t &rx_mux_register;
-		volatile uint32_t &tx_mux_register;
+		const uint8_t rx_pin;
+		const uint8_t tx_pin;
+		//volatile uint32_t &rx_mux_register;
+		//volatile uint32_t &tx_mux_register;
 		const uint8_t rx_mux_val;
 		const uint8_t tx_mux_val;
 	} hardware_t;
