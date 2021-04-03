@@ -38,6 +38,8 @@
 #define FILE_WRITE 1
 #define FILE_WRITE_BEGIN 2
 
+#define FS_FILE_SUPPORT_DATES 1
+
 enum SeekMode {
 	SeekSet = 0,
 	SeekCur = 1,
@@ -87,6 +89,23 @@ public:
 		return refcount;
 	}
 #endif
+#ifdef FS_FILE_SUPPORT_DATES
+	// These will all return false as only some FS support it.
+  	virtual bool getAccessDateTime(uint16_t* pdate, uint16_t* ptime) {
+  		return (f) ? f->getAccessDateTime(pdate, ptime) : false;
+  	}
+  	virtual bool getCreateDateTime(uint16_t* pdate, uint16_t* ptime) {
+  		return (f) ? f->getCreateDateTime(pdate, ptime) : false;
+  	}
+  	virtual bool getModifyDateTime(uint16_t* pdate, uint16_t* ptime) {
+  		return (f) ? f->getModifyDateTime(pdate, ptime) : false;
+  	}
+  	virtual bool timestamp(uint8_t flags, uint16_t year, uint8_t month, uint8_t day,
+                 uint8_t hour, uint8_t minute, uint8_t second) {
+  		return (f) ? f->timestamp(flags, year, month, day, hour, minute, second) : false;
+  	}
+#endif
+
 	virtual size_t read(void *buf, size_t nbyte) {
 		return (f) ? f->read(buf, nbyte) : 0;
 	}
