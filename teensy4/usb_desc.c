@@ -477,7 +477,7 @@ static uint8_t rawhid_report_desc[] = {
         0x06, LSB(RAWHID_USAGE_PAGE), MSB(RAWHID_USAGE_PAGE),
         0x0A, LSB(RAWHID_USAGE), MSB(RAWHID_USAGE),
         0xA1, 0x01,                     // Collection 0x01
-        0x75, 0x08,                     //   report size = 8 bits
+        0x75, 0x08*RAWHID_TX_SIZE_480/RAWHID_TX_SIZE_12,  //   report size = 8 bits - Hack to create report size 512 or 64...
         0x15, 0x00,                     //   logical minimum = 0
         0x26, 0xFF, 0x00,               //   logical maximum = 255
         0x95, RAWHID_TX_SIZE_12,        //   report count
