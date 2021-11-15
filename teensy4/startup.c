@@ -538,6 +538,8 @@ void unused_interrupt_vector(void)
 	info = (struct arm_fault_info_struct *)0x2027FF80;
 	info->ipsr = ipsr;
 	asm volatile("mrs %0, msp\n" : "=r" (stack) :: "memory");
+	digitalToggleFast(7);
+
 	info->cfsr = SCB_CFSR;
 	info->hfsr = SCB_HFSR;
 	info->mmfar = SCB_MMFAR;
@@ -556,8 +558,17 @@ void unused_interrupt_vector(void)
 		for (i=0; i < 32; i++) crc = (crc >> 1) ^ (crc & 1)*0xEDB88320;
 	}
 	info->crc = crc;
+	////////////////////////////////////////////////
+	printf("\n >>>>> unused_interrupt_vector <<<<<\n");
+    printf("  Code was executing from address 0x%x\n", info->ret);
+    printf("  CFSR: %x\n", info->cfsr);
+	if (((info->cfsr & (0x80)) >> 7) == 1) printf("\t(MMARVALID) Accessed Address: 0x%x\n", info->mmfar);
+	printf("  XPSR: %x\n", info->xpsr);
+    printf("  HFSR: %x\n", info->hfsr);
+    printf("  STACK: %x\n", (uint32_t)stack);
+    for (uint16_t i = 0; i < 32; i+=4) printf("\t %x %x %x %x\n", stack[-i],stack[-i-1], stack[-i-2],stack[-i-3]);
+	////////////////////////////////////////////////
 	arm_dcache_flush_delete(info, sizeof(*info));
-
 	// LED blink can show fault mode - by default we don't mess with pin 13
 	//IOMUXC_SW_MUX_CTL_PAD_GPIO_B0_03 = 5; // pin 13
 	//IOMUXC_SW_PAD_CTL_PAD_GPIO_B0_03 = IOMUXC_PAD_DSE(7);
