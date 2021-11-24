@@ -53,6 +53,7 @@ static volatile uint8_t rx_head;
 static volatile uint8_t rx_tail;
 static uint8_t rx_list[RX_NUM + 1];
 static int rx_list_transfer_len[RX_NUM + 1];
+static int rx_list_transfer_status[RX_NUM + 1];
 
 static uint16_t rx_packet_size=0;
 static void rx_queue_transfer(int i);
@@ -120,12 +121,19 @@ static void rx_event(transfer_t *t)
 	rx_list[head] = i;
 	// remember how many bytes were actually sent by host...
 	int len = rx_packet_size - ((t->status >> 16) & 0x7FFF);
+	rx_list_transfer_status[head] = t->status;
 	rx_list_transfer_len[head] = len;
 	rx_head = head;
 }
 
-
 int usb_mtp_recv(void *buffer, uint32_t timeout)
+{
+	uint32_t transfer_status;
+	return usb_mtp_recv_extended(buffer, &transfer_status, timeout);
+}
+
+
+int usb_mtp_recv_extended(void *buffer, uint32_t *transfer_status, uint32_t timeout)
 {
 	uint32_t wait_begin_at = systick_millis_count;
 	uint32_t tail = rx_tail;
@@ -133,6 +141,7 @@ int usb_mtp_recv(void *buffer, uint32_t timeout)
 		if (!usb_configuration) return -1; // usb not enumerated by host
 		if (tail != rx_head) break;
 		if (systick_millis_count - wait_begin_at > timeout)  {
+			*transfer_status = 0xFFFFFFFFu;  // timed out.
 			return 0;
 		}
 		yield();
@@ -140,6 +149,7 @@ int usb_mtp_recv(void *buffer, uint32_t timeout)
 	if (++tail > RX_NUM) tail = 0;
 	uint32_t i = rx_list[tail];
 	int len = rx_list_transfer_len[tail];
+	*transfer_status = rx_list_transfer_status[tail];
 	rx_tail = tail;
 
 	uint8_t *rx_item_buffer = rx_buffer + i * MTP_RX_SIZE_480;

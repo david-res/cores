@@ -41,6 +41,7 @@
 extern "C" {
 #endif
 void usb_mtp_configure(void);
+int usb_mtp_recv_extended(void *buffer, uint32_t *transfer_status, uint32_t timeout);
 int usb_mtp_recv(void *buffer, uint32_t timeout);
 int usb_mtp_available(void);
 int usb_mtp_send(const void *buffer, uint32_t len, uint32_t timeout);
