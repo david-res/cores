@@ -37,6 +37,9 @@
 
 #include "debug/printf.h"
 #ifdef MTP_INTERFACE // defined by usb_dev.h -> usb_desc.h
+#ifndef MTP_RX_SIZE 
+#define MTP_RX_SIZE MTP_RX_SIZE_480  // experiment to see if we can receive multiple packets...
+#endif
 
 extern volatile uint8_t usb_high_speed;
 
@@ -48,7 +51,7 @@ static uint16_t tx_packet_size=0;
 
 #define RX_NUM  4
 static transfer_t rx_transfer[RX_NUM] __attribute__ ((used, aligned(32)));
-DMAMEM static uint8_t rx_buffer[MTP_RX_SIZE_480 * RX_NUM] __attribute__ ((aligned(32)));
+DMAMEM static uint8_t rx_buffer[MTP_RX_SIZE * RX_NUM] __attribute__ ((aligned(32)));
 static volatile uint8_t rx_head;
 static volatile uint8_t rx_tail;
 static uint8_t rx_list[RX_NUM + 1];
@@ -101,11 +104,11 @@ int usb_mtp_txSize(void)
 
 static void rx_queue_transfer(int i)
 {
-	void *buffer = rx_buffer + i * MTP_RX_SIZE_480;
-	arm_dcache_delete(buffer, rx_packet_size);
+	void *buffer = rx_buffer + i * MTP_RX_SIZE;
+	arm_dcache_delete(buffer, MTP_RX_SIZE);
 	//memset(buffer, )
 	NVIC_DISABLE_IRQ(IRQ_USB1);
-	usb_prepare_transfer(rx_transfer + i, buffer, rx_packet_size, i);
+	usb_prepare_transfer(rx_transfer + i, buffer, MTP_RX_SIZE, i);
 	NVIC_DISABLE_IRQ(IRQ_USB1);
 	usb_receive(MTP_RX_ENDPOINT, rx_transfer + i);
 	NVIC_ENABLE_IRQ(IRQ_USB1);
@@ -114,13 +117,13 @@ static void rx_queue_transfer(int i)
 static void rx_event(transfer_t *t)
 {
 	int i = t->callback_param;
-	//printf("rx event i=%d\n", i);
 	// received a packet with data
 	uint32_t head = rx_head;
 	if (++head > RX_NUM) head = 0;
 	rx_list[head] = i;
 	// remember how many bytes were actually sent by host...
-	int len = rx_packet_size - ((t->status >> 16) & 0x7FFF);
+	int len = MTP_RX_SIZE - ((t->status >> 16) & 0x7FFF);
+	printf("rx event i=%d status:%x len:%u\n", i, t->status, len);
 	rx_list_transfer_status[head] = t->status;
 	rx_list_transfer_len[head] = len;
 	rx_head = head;
@@ -152,7 +155,7 @@ int usb_mtp_recv_extended(void *buffer, uint32_t *transfer_status, uint32_t time
 	*transfer_status = rx_list_transfer_status[tail];
 	rx_tail = tail;
 
-	uint8_t *rx_item_buffer = rx_buffer + i * MTP_RX_SIZE_480;
+	uint8_t *rx_item_buffer = rx_buffer + i * MTP_RX_SIZE;
 	// BUGBUG Should we use the 
 	memcpy(buffer,  rx_item_buffer, len);
 	rx_queue_transfer(i);

@@ -691,6 +691,7 @@ let me know?  http://forum.pjrc.com/forums/4-Suggestions-amp-Bug-Reports
   #define MTP_RX_ENDPOINT	3
   #define MTP_RX_SIZE_12	64
   #define MTP_RX_SIZE_480	512
+  #define MTP_RX_SIZE 2048  // experiment to see if we can receive multiple packets...
   #define MTP_EVENT_ENDPOINT	4
   #define MTP_EVENT_SIZE	32
   #define MTP_EVENT_INTERVAL_12	10	// 10 = 10 ms
