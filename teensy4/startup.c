@@ -538,7 +538,6 @@ void unused_interrupt_vector(void)
 	info = (struct arm_fault_info_struct *)0x2027FF80;
 	info->ipsr = ipsr;
 	asm volatile("mrs %0, msp\n" : "=r" (stack) :: "memory");
-	digitalToggleFast(7);
 
 	info->cfsr = SCB_CFSR;
 	info->hfsr = SCB_HFSR;
