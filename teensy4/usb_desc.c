@@ -1205,7 +1205,11 @@ PROGMEM const uint8_t usb_config_descriptor_480[CONFIG_DESC_SIZE] = {
         7,                                      // bLength
         5,                                      // bDescriptorType
         RAWHID_TX_ENDPOINT | 0x80,              // bEndpointAddress
+#if defined(USB_RAWHID512B)
+        0x02,                                   // bmAttributes (0x02=bulk)
+#else
         0x03,                                   // bmAttributes (0x03=intr)
+#endif        
         LSB(RAWHID_TX_SIZE_480),                // wMaxPacketSize 
         MSB(RAWHID_TX_SIZE_480),
         RAWHID_TX_INTERVAL,                     // bInterval
@@ -1213,7 +1217,11 @@ PROGMEM const uint8_t usb_config_descriptor_480[CONFIG_DESC_SIZE] = {
         7,                                      // bLength
         5,                                      // bDescriptorType
         RAWHID_RX_ENDPOINT,                     // bEndpointAddress
+#if defined(USB_RAWHID512B)
+        0x02,                                   // bmAttributes (0x02=bulk)
+#else
         0x03,                                   // bmAttributes (0x03=intr)
+#endif        
         LSB(RAWHID_RX_SIZE_480),                // wMaxPacketSize 
         MSB(RAWHID_RX_SIZE_480),
         RAWHID_RX_INTERVAL,			// bInterval
@@ -2221,14 +2229,22 @@ PROGMEM const uint8_t usb_config_descriptor_12[CONFIG_DESC_SIZE] = {
         7,                                      // bLength
         5,                                      // bDescriptorType
         RAWHID_TX_ENDPOINT | 0x80,              // bEndpointAddress
+#if defined(USB_RAWHID512B)
+        0x02,                                   // bmAttributes (0x02=bulk)
+#else
         0x03,                                   // bmAttributes (0x03=intr)
+#endif        
         RAWHID_TX_SIZE_12, 0,                      // wMaxPacketSize
         RAWHID_TX_INTERVAL,                     // bInterval
         // endpoint descriptor, USB spec 9.6.6, page 269-271, Table 9-13
         7,                                      // bLength
         5,                                      // bDescriptorType
         RAWHID_RX_ENDPOINT,                     // bEndpointAddress
+#if defined(USB_RAWHID512B)
+        0x02,                                   // bmAttributes (0x02=bulk)
+#else
         0x03,                                   // bmAttributes (0x03=intr)
+#endif        
         RAWHID_RX_SIZE_12, 0,                      // wMaxPacketSize
         RAWHID_RX_INTERVAL,			// bInterval
 #endif // RAWHID_INTERFACE
