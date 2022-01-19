@@ -47,6 +47,8 @@ int usb_mtp_send(const void *buffer, uint32_t len, uint32_t timeout);
 int usb_mtp_rxSize(void);
 int usb_mtp_txSize(void);
 
+void usb_mtp_first_rx_cb(void);
+
 extern uint32_t mtp_txEventCount;
 extern volatile uint8_t usb_mtp_status;
 

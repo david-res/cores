@@ -117,11 +117,21 @@ static void rx_queue_transfer(int i)
 	NVIC_ENABLE_IRQ(IRQ_USB1);
 }
 
+
+static uint8_t usb_mtp_first_rx = 1; 
+void usb_mtp_first_rx_cb() __attribute__((weak));
+void usb_mtp_first_rx_cb(void) {};
+
+
 static void rx_event(transfer_t *t)
 {
 	int i = t->callback_param;
 	//printf("rx event i=%d\n", i);
 	// received a packet with data
+	if (usb_mtp_first_rx) {
+		usb_mtp_first_rx = 0;
+		usb_mtp_first_rx_cb();
+	}
 	uint32_t head = rx_head;
 	if (++head > RX_NUM) head = 0;
 	rx_list[head] = i;
