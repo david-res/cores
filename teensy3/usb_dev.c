@@ -414,7 +414,8 @@ static void usb_setup(void)
 		//serial_print(":)\n");
 		return;
 	  case 0x0A21: // HID SET_IDLE
-		break;
+	  	return;
+		// break;
 	  // case 0xC940:
 #endif
 
